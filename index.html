@@ -16,6 +16,7 @@
   #nav{width:100%;background:var(--panel);border-bottom:2px solid var(--gold);padding:8px 16px;display:flex;align-items:center;gap:12px;font-size:7px;flex-shrink:0;}
   #nav a{color:var(--gold);text-decoration:none;}#nav a:hover{text-decoration:underline;}#nav .sep{color:var(--gray);}
   .screen{width:100%;max-width:560px;padding:10px 10px 20px;display:none;flex-direction:column;gap:8px;}
+  #map-screen{max-width:100%;padding:0;gap:0;}
   .screen.active{display:flex;}
   /* TITLE */
   #title-screen{align-items:center;text-align:center;gap:16px;padding:18px 14px 24px;}
@@ -25,14 +26,14 @@
   .start-btn{font-family:'Press Start 2P',monospace;font-size:10px;background:var(--gold);color:#000;border:none;padding:12px 28px;cursor:pointer;animation:pulse 1.5s infinite;}
   @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
   /* MAP */
-  #map-wrap{width:100%;aspect-ratio:16/9;background:#000;border:3px solid var(--border);overflow:hidden;position:relative;}
+  #map-wrap{width:100%;background:#000;border:0;border-bottom:2px solid var(--border);overflow:hidden;position:relative;flex-shrink:0;height:calc(100svh - 38px - 44px - 130px);min-height:200px;}
   #map-canvas{width:100%;height:100%;image-rendering:pixelated;display:block;}
   #map-overlay{position:absolute;inset:0;pointer-events:none;}
   #zone-flash{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);background:#000a;border:1px solid var(--gold);padding:3px 8px;font-size:6px;color:var(--gold);opacity:0;transition:opacity 0.5s;white-space:nowrap;}
   #map-hud{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:6px;}
   #hud-hp{color:var(--green);}#hud-mp{color:var(--cyan);}#hud-gold{color:var(--gold);}
   #hud-zone{color:#aaa;margin-left:auto;}
-  #dpad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px);gap:3px;justify-content:center;margin:2px auto 0;}
+  #dpad{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px);gap:3px;justify-content:center;margin:4px auto 2px;}
   .dpad-btn{font-family:'Press Start 2P',monospace;font-size:13px;background:var(--panel);border:2px solid var(--border);color:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:4px;user-select:none;-webkit-user-select:none;}
   .dpad-btn:active{background:var(--border);}.dpad-center{background:transparent;border-color:transparent;font-size:7px;color:var(--gray);line-height:1.3;text-align:center;}
   #map-msg{font-size:7px;color:var(--cyan);text-align:center;min-height:14px;}
@@ -477,12 +478,14 @@ function drawMapTile(col,row,sx,sy){
 
 function drawMap(){
   const m=G.currentInterior||{tiles:G.map,cols:G.mapCols,rows:G.mapRows};
-  const camX=G.heroCol*TW+TW/2-160;
-  const camY=G.heroRow*TH+TH/2-90;
-  mx.clearRect(0,0,320,180);
+  const cw=mc.width/(window.devicePixelRatio||1);
+  const ch=mc.height/(window.devicePixelRatio||1);
+  const camX=G.heroCol*TW+TW/2-cw/2;
+  const camY=G.heroRow*TH+TH/2-ch/2;
+  mx.clearRect(0,0,mc.width,mc.height);
   const sc=Math.floor(camX/TW)-1,sr=Math.floor(camY/TH)-1;
-  for(let r=sr;r<sr+VIEW_ROWS+2;r++){
-    for(let c=sc;c<sc+VIEW_COLS+2;c++){
+  for(let r=sr;r<sr+Math.ceil(ch/TH)+3;r++){
+    for(let c=sc;c<sc+Math.ceil(cw/TW)+3;c++){
       const sx=c*TW-camX,sy=r*TH-camY;
       if(r<0||r>=m.rows||c<0||c>=m.cols){mx.fillStyle='#0a1a3a';mx.fillRect(sx,sy,TW,TH);}
       else drawMapTile(c,r,sx,sy);
@@ -902,7 +905,7 @@ function endBattle(){
   if(xpEarned>0)parts.push('* '+xpEarned+' XP earned! ('+G.xp+'/'+G.xpNext+')');
   if(lvMsg)parts.push('* '+lvMsg+' HP/MP/ATK up!');
   const msg=parts.join(' ');
-  doFlash(()=>{showScreen('map-screen');drawMap();document.getElementById('map-msg').textContent=msg||'* You return to the overworld.';});
+  doFlash(()=>{showScreen('map-screen');resizeMapCanvas();drawMap();document.getElementById('map-msg').textContent=msg||'* You return to the overworld.';});
 }
 function doFight(){
   if(G.phase!=='battle')return;G.pacifist=false;
@@ -986,8 +989,23 @@ function triggerEnd(win){
 // =============================================================================
 // START
 // =============================================================================
+
+function resizeMapCanvas(){
+  const wrap=document.getElementById('map-wrap');
+  const canvas=document.getElementById('map-canvas');
+  // Match CSS display size for sharp rendering
+  const dpr=window.devicePixelRatio||1;
+  const w=wrap.clientWidth;
+  const h=wrap.clientHeight;
+  if(w>0&&h>0){
+    canvas.width=Math.round(w*dpr);
+    canvas.height=Math.round(h*dpr);
+    mx.setTransform(dpr,0,0,dpr,0,0);
+  }
+}
+window.addEventListener('resize',()=>{if(G.phase==='map'){resizeMapCanvas();drawMap();}});
 function startGame(){
-  G.phase='map';showScreen('map-screen');drawMap();
+  G.phase='map';showScreen('map-screen');resizeMapCanvas();drawMap();
   showZoneFlash('Welcome to Pixel Quest!');
   document.getElementById('map-msg').textContent='* Use arrow keys or D-pad to explore the world!';
 }
