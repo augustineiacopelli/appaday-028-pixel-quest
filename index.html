@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>028 · Pixel Quest</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  :root{
+    --bg:#1a1a2e;--panel:#0f0f23;--gold:#f5c542;--gold2:#e0a800;
+    --white:#e8e8f0;--red:#e74c3c;--green:#2ecc71;--blue:#3498db;
+    --cyan:#00d4ff;--gray:#555577;--border:#3a3a5c;--purple:#9b59b6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;touch-action:manipulation;}
+  body{background:var(--bg);color:var(--white);font-family:'Press Start 2P',monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+  #nav{width:100%;background:var(--panel);border-bottom:2px solid var(--gold);padding:8px 16px;display:flex;align-items:center;gap:12px;font-size:7px;flex-shrink:0;}
+  #nav a{color:var(--gold);text-decoration:none;}#nav a:hover{text-decoration:underline;}#nav .sep{color:var(--gray);}
+  .screen{width:100%;max-width:560px;padding:10px 10px 20px;display:none;flex-direction:column;gap:8px;}
+  .screen.active{display:flex;}
+  /* TITLE */
+  #title-screen{align-items:center;text-align:center;gap:16px;padding:18px 14px 24px;}
+  #title-screen h1{font-size:20px;color:var(--gold);text-shadow:0 0 14px var(--gold2);line-height:1.5;}
+  #title-screen .sub{font-size:8px;color:var(--cyan);}
+  #title-screen .lore{font-size:7px;color:var(--white);line-height:2.2;max-width:360px;}
+  .start-btn{font-family:'Press Start 2P',monospace;font-size:10px;background:var(--gold);color:#000;border:none;padding:12px 28px;cursor:pointer;animation:pulse 1.5s infinite;}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+  /* MAP */
+  #map-wrap{width:100%;aspect-ratio:16/9;background:#000;border:3px solid var(--border);overflow:hidden;position:relative;}
+  #map-canvas{width:100%;height:100%;image-rendering:pixelated;display:block;}
+  #map-overlay{position:absolute;inset:0;pointer-events:none;}
+  #zone-flash{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);background:#000a;border:1px solid var(--gold);padding:3px 8px;font-size:6px;color:var(--gold);opacity:0;transition:opacity 0.5s;white-space:nowrap;}
+  #map-hud{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:6px;}
+  #hud-hp{color:var(--green);}#hud-mp{color:var(--cyan);}#hud-gold{color:var(--gold);}
+  #hud-zone{color:#aaa;margin-left:auto;}
+  #dpad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px);gap:3px;justify-content:center;margin:2px auto 0;}
+  .dpad-btn{font-family:'Press Start 2P',monospace;font-size:13px;background:var(--panel);border:2px solid var(--border);color:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:4px;user-select:none;-webkit-user-select:none;}
+  .dpad-btn:active{background:var(--border);}.dpad-center{background:transparent;border-color:transparent;font-size:7px;color:var(--gray);line-height:1.3;text-align:center;}
+  #map-msg{font-size:7px;color:var(--cyan);text-align:center;min-height:14px;}
+  /* SHOP / INN overlay */
+  #shop-overlay{display:none;position:fixed;inset:0;background:#000c;z-index:50;align-items:center;justify-content:center;}
+  #shop-overlay.active{display:flex;}
+  #shop-box{background:var(--panel);border:3px solid var(--gold);padding:16px;max-width:340px;width:90%;display:flex;flex-direction:column;gap:10px;}
+  #shop-title{font-size:9px;color:var(--gold);text-align:center;}
+  #shop-gold{font-size:7px;color:var(--gold);text-align:center;}
+  .shop-item{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid var(--border);}
+  .shop-item-name{font-size:7px;flex:1;}
+  .shop-item-stat{font-size:6px;color:var(--cyan);}
+  .shop-item-cost{font-size:6px;color:var(--gold);margin-left:4px;}
+  .shop-btn{font-family:'Press Start 2P',monospace;font-size:6px;background:var(--border);border:1px solid var(--gold);color:var(--gold);padding:4px 8px;cursor:pointer;}
+  .shop-btn:hover{background:var(--gold);color:#000;}
+  .shop-btn:disabled{opacity:.3;pointer-events:none;}
+  .shop-btn.equip{border-color:var(--cyan);color:var(--cyan);}
+  .shop-btn.equip:hover{background:var(--cyan);color:#000;}
+  .shop-item-equipped{font-size:5px;color:var(--green);margin-left:4px;}
+  #shop-close{font-family:'Press Start 2P',monospace;font-size:7px;background:transparent;border:2px solid var(--gray);color:var(--gray);padding:6px 14px;cursor:pointer;align-self:center;margin-top:4px;}
+  #shop-close:hover{border-color:var(--white);color:var(--white);}
+  #shop-msg{font-size:7px;color:var(--green);text-align:center;min-height:14px;}
+  /* BATTLE */
+  #scene-box{width:100%;aspect-ratio:16/9;background:#000;border:3px solid var(--border);overflow:hidden;}
+  #scene-canvas{width:100%;height:100%;image-rendering:pixelated;display:block;}
+  #status-bars{display:flex;gap:8px;flex-wrap:wrap;}
+  .ccard{flex:1;min-width:130px;background:var(--panel);border:2px solid var(--border);padding:7px 9px;}
+  .cname{font-size:6px;color:var(--gold);margin-bottom:5px;}
+  .bar-row{display:flex;align-items:center;gap:5px;margin-bottom:3px;}
+  .bar-lbl{font-size:5px;color:var(--white);white-space:nowrap;width:32px;}
+  .bar-wrap{flex:1;height:7px;background:#222;border:1px solid #444;}
+  .bar{height:100%;transition:width 0.4s,background 0.4s;}
+  .bar.hp{background:var(--green);}.bar.hp.low{background:var(--red);}.bar.hp.mid{background:var(--gold);}
+  .bar.mp{background:var(--cyan);}
+  #dialogue-box{background:#000;border:3px solid var(--white);padding:12px 14px 10px;min-height:80px;position:relative;cursor:pointer;}
+  #dlg-name{font-size:8px;color:var(--gold);margin-bottom:7px;}
+  #dlg-text{font-size:8px;line-height:1.8;color:var(--white);white-space:pre-wrap;}
+  #dlg-arrow{position:absolute;bottom:7px;right:10px;font-size:8px;color:var(--white);animation:blink .8s infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  #action-panel{background:var(--panel);border:2px solid var(--border);padding:9px;display:none;flex-direction:column;gap:7px;}
+  #act-label{font-size:6px;color:var(--gray);margin-bottom:2px;}
+  .arow{display:flex;gap:7px;flex-wrap:wrap;}
+  .btn{font-family:'Press Start 2P',monospace;font-size:7px;padding:7px 10px;border:2px solid var(--border);background:#111;color:var(--white);cursor:pointer;transition:background .15s,border-color .15s,color .15s;flex:1;min-width:70px;text-align:center;}
+  .btn:hover{background:var(--border);border-color:var(--white);}
+  .btn.fight{border-color:var(--red);color:var(--red);}.btn.fight:hover{background:var(--red);color:#000;}
+  .btn.act{border-color:var(--cyan);color:var(--cyan);}.btn.act:hover{background:var(--cyan);color:#000;}
+  .btn.magic{border-color:var(--purple);color:var(--purple);}.btn.magic:hover{background:var(--purple);color:#fff;}
+  .btn.item{border-color:var(--gold);color:var(--gold);}.btn.item:hover{background:var(--gold);color:#000;}
+  .btn.spare{border-color:var(--green);color:var(--green);}.btn.spare:hover{background:var(--green);color:#000;}
+  .btn:disabled{opacity:.35;pointer-events:none;}
+  #footer-tap{font-size:6px;color:var(--gray);text-align:center;padding:3px 0;display:none;}
+  /* END */
+  #end-screen{align-items:center;text-align:center;gap:14px;padding:20px;}
+  #end-screen h2{font-size:15px;}
+  #end-screen p{font-size:7px;line-height:2.1;color:var(--white);max-width:340px;white-space:pre-wrap;}
+  .restart-btn{font-family:'Press Start 2P',monospace;font-size:8px;background:var(--gold);color:#000;border:none;padding:9px 20px;cursor:pointer;margin-top:6px;}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:999;transition:opacity 0.12s;}
+</style>
+</head>
+<body>
+<div id="nav">
+  <span>#028</span><span class="sep">&middot;</span><span>Pixel Quest</span>
+  <span class="sep">&middot;</span>
+  <a href="https://augustineiacopelli.github.io/appaday">&larr; Portfolio</a>
+</div>
+<div id="flash"></div>
+
+<!-- SHOP OVERLAY -->
+<div id="shop-overlay">
+  <div id="shop-box">
+    <div id="shop-title">SHOP</div>
+    <div id="shop-gold"></div>
+    <div id="shop-items"></div>
+    <div id="shop-msg"></div>
+    <button id="shop-close" onclick="closeShop()">LEAVE</button>
+  </div>
+</div>
+
+<!-- TITLE -->
+<div id="title-screen" class="screen active">
+  <h1>PIXEL<br>QUEST</h1>
+  <div class="sub">A vast overworld RPG</div>
+  <div class="lore">
+    A sprawling world awaits.<br>
+    Explore forests, caves, and sky roads.<br>
+    Find villages to rest and restock.<br>
+    Conquer castles to win!
+  </div>
+  <button class="start-btn" onclick="startGame()">&#9658; START GAME</button>
+  <div style="font-size:6px;color:var(--gray);margin-top:4px;">Arrow keys or D-pad &middot; Enter doorways to go inside</div>
+</div>
+
+<!-- MAP -->
+<div id="map-screen" class="screen">
+  <div id="map-wrap">
+    <canvas id="map-canvas" width="320" height="180"></canvas>
+    <div id="map-overlay"><div id="zone-flash"></div></div>
+  </div>
+  <div id="map-hud">
+    <span id="hud-hp">HP:20/20</span>
+    <span id="hud-mp">MP:10/10</span>
+    <span id="hud-gold">Gold:0</span>
+    <span id="hud-atk">ATK:3</span>
+    <span id="hud-def">DEF:0</span>
+    <span id="hud-lv" style="color:var(--gold)">Lv:1</span><span id="hud-zone" style="color:#aaa"></span>
+  </div>
+  <div id="dpad">
+    <div></div>
+    <button class="dpad-btn" ontouchstart="dpadStart('up');event.preventDefault()" ontouchend="dpadEnd()" onmousedown="dpadStart('up')" onmouseup="dpadEnd()">&#9650;</button>
+    <div></div>
+    <button class="dpad-btn" ontouchstart="dpadStart('left');event.preventDefault()" ontouchend="dpadEnd()" onmousedown="dpadStart('left')" onmouseup="dpadEnd()">&#9664;</button>
+    <div class="dpad-btn dpad-center">MAP</div>
+    <button class="dpad-btn" ontouchstart="dpadStart('right');event.preventDefault()" ontouchend="dpadEnd()" onmousedown="dpadStart('right')" onmouseup="dpadEnd()">&#9654;</button>
+    <div></div>
+    <button class="dpad-btn" ontouchstart="dpadStart('down');event.preventDefault()" ontouchend="dpadEnd()" onmousedown="dpadStart('down')" onmouseup="dpadEnd()">&#9660;</button>
+    <div></div>
+  </div>
+  <div id="map-msg"></div>
+</div>
+
+<!-- BATTLE -->
+<div id="battle-screen" class="screen">
+  <div id="scene-box"><canvas id="scene-canvas" width="320" height="180"></canvas></div>
+  <div id="status-bars">
+    <div class="ccard">
+      <div class="cname">Hero</div>
+      <div class="bar-row"><span class="bar-lbl" id="hero-hp-txt">HP20/20</span><div class="bar-wrap"><div class="bar hp" id="hero-hp-bar" style="width:100%"></div></div></div>
+      <div class="bar-row"><span class="bar-lbl" id="hero-mp-txt">MP10/10</span><div class="bar-wrap"><div class="bar mp" id="hero-mp-bar" style="width:100%"></div></div></div>
+    </div>
+    <div class="ccard" id="enemy-card">
+      <div class="cname" id="enemy-name-lbl">Enemy</div>
+      <div class="bar-row"><span class="bar-lbl" id="enemy-hp-txt">HP</span><div class="bar-wrap"><div class="bar hp" id="enemy-hp-bar" style="width:100%"></div></div></div>
+    </div>
+  </div>
+  <div id="dialogue-box" onclick="advanceDialogue()">
+    <div id="dlg-name"></div>
+    <div id="dlg-text"></div>
+    <div id="dlg-arrow">&#9660;</div>
+  </div>
+  <div id="action-panel">
+    <div id="act-label">WHAT WILL YOU DO?</div>
+    <div class="arow">
+      <button class="btn fight" onclick="doFight()">FIGHT</button>
+      <button class="btn act" id="act-btn" onclick="doAct()">ACT</button>
+    </div>
+    <div class="arow">
+      <button class="btn magic" id="magic-btn" onclick="doMagic()">MAGIC</button>
+      <button class="btn item" onclick="doItem()">ITEM</button>
+    </div>
+    <div class="arow">
+      <button class="btn spare" id="spare-btn" onclick="doSpare()">SPARE</button>
+    </div>
+  </div>
+  <div id="footer-tap">Tap text box to continue</div>
+</div>
+
+<!-- END -->
+<div id="end-screen" class="screen">
+  <h2 id="end-title">GAME OVER</h2>
+  <p id="end-msg"></p>
+  <button class="restart-btn" onclick="location.reload()">Play Again</button>
+</div>
+<script>
+// =============================================================================
+// TILE CONSTANTS
+// 0=ocean  1=grass  2=forest  3=cave  4=skyroad  5=path  6=castle-door(win)
+// 7=mountain  8=village-path  9=castle-exterior  10=dungeon  11=void/black
+// 12=shop(village interior)  13=inn(village interior)  14=castle-inside
+// 15=exit(teleport out)  16=boss-room  17=sand  18=snow  19=bridge
+// =============================================================================
+const T={
+  OCEAN:0,GRASS:1,FOREST:2,CAVE:3,SKY:4,PATH:5,WIN:6,
+  MOUNTAIN:7,VPATH:8,CASTLE:9,DUNGEON:10,VOID:11,
+  SHOP:12,INN:13,CASTLE_IN:14,EXIT:15,BOSS:16,SAND:17,SNOW:18,BRIDGE:19
+};
+const PASSABLE=new Set([1,2,3,4,5,6,8,9,12,13,14,15,16,17,18,19]);
+const DANGER=new Set([2,3,4,10,16,14]);
+const SAFE=new Set([1,5,8,9,12,13,14,15,17,18,19]);
+
+const TW=12,TH=12; // tile size on 320x180 canvas
+const VIEW_COLS=Math.ceil(320/TW)+2; // ~29
+const VIEW_ROWS=Math.ceil(180/TH)+2; // ~17
+
+// Tile colors
+const TC={
+  0:'#1a3a6e', 1:'#2d6e2d', 2:'#1a4a1a', 3:'#2a1a3a', 4:'#0d1a3a',
+  5:'#6b4c2a', 6:'#8b6914', 7:'#4a4a4a', 8:'#8a7060', 9:'#5a4a2a',
+  10:'#1a1a2a',11:'#000000',12:'#5a3a1a',13:'#3a2a5a',14:'#2a2a1a',
+  15:'#1a3a1a',16:'#3a0a0a',17:'#c8a46a',18:'#c0d8e8',19:'#8a6a3a'
+};
+
+const ZONE_NAMES={
+  0:'Ocean',1:'Grassy Plains',2:'Dark Forest',3:'Crystal Cave',4:'Sky Road',
+  5:'Old Path',6:'Castle Gate!',7:'Mountain Peak',8:'Village Road',
+  9:'Castle Grounds',10:'Dungeon',11:'',12:'Shop',13:'Inn',14:'Castle Hall',
+  15:'Exit',16:'Boss Chamber',17:'Sandy Desert',18:'Frozen Wastes',19:'Bridge'
+};
+const ZONE_ENEMIES={
+  2:[0,0,5,5,6],3:[1,1,6,7],4:[1,2,2,7],10:[3,6,7],16:[4,4,3],14:[3,3,5,7]
+};
+const ENCOUNTER_RATE=0.32;
+const ENCOUNTER_COOLDOWN=2;
+// =============================================================================
+// WORLD MAP  (60 cols x 38 rows)
+// =============================================================================
+const WORLD=[[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 9, 9, 9, 9, 9, 9, 9, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 9, 9, 9, 9, 9, 9, 9, 1, 1, 1, 1, 1, 1, 1, 5, 8, 8, 8, 8, 8, 8, 8, 18, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 9, 9, 9, 9, 9, 9, 9, 1, 1, 1, 3, 3, 3, 3, 8, 8, 12, 8, 8, 13, 8, 5, 5, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 9, 9, 9, 5, 9, 9, 9, 1, 1, 1, 3, 3, 3, 3, 8, 8, 8, 8, 8, 8, 8, 8, 18, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 10, 10, 10, 5, 10, 10, 10, 1, 1, 1, 3, 3, 3, 3, 8, 8, 8, 8, 8, 8, 8, 8, 18, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 10, 10, 10, 5, 10, 10, 10, 1, 1, 1, 3, 3, 3, 3, 8, 8, 8, 8, 8, 8, 8, 8, 18, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 10, 10, 10, 5, 10, 10, 10, 5, 5, 5, 9, 9, 9, 9, 9, 9, 9, 3, 18, 18, 18, 18, 18, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 10, 10, 10, 5, 10, 10, 10, 7, 7, 1, 9, 9, 9, 9, 9, 9, 9, 3, 18, 18, 18, 18, 18, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 10, 10, 10, 5, 10, 10, 10, 7, 7, 1, 9, 9, 9, 9, 9, 9, 9, 3, 18, 18, 18, 18, 18, 18, 18, 18, 18, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 5, 1, 5, 5, 5, 5, 5, 5, 5, 5, 5, 9, 9, 9, 5, 9, 9, 9, 3, 3, 3, 3, 1, 1, 1, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 7, 7, 5, 7, 7, 7, 7, 7, 7, 1, 9, 9, 9, 6, 9, 9, 9, 3, 3, 3, 3, 1, 1, 1, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 7, 7, 5, 7, 7, 7, 7, 7, 7, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, 1, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 7, 7, 5, 7, 7, 7, 7, 7, 7, 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 1, 1, 1, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 7, 7, 5, 7, 7, 7, 7, 7, 7, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 7, 7, 5, 5, 5, 5, 19, 19, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 8, 8, 12, 8, 8, 13, 8, 8, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 5, 5, 8, 8, 8, 8, 8, 8, 5, 5, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 19, 19, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 2, 2, 2, 8, 8, 8, 8, 8, 8, 8, 8, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 17, 17, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 17, 17, 5, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 17, 17, 5, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 17, 17, 5, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 17, 17, 5, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 17, 17, 5, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 17, 17, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 7, 7, 7, 7, 7, 7, 5, 5, 1, 5, 5, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]];
+
+const HERO_WORLD_COL=10;
+const HERO_WORLD_ROW=35;
+
+// =============================================================================
+// INTERIOR MAPS
+// Each interior map: {id, cols, rows, tiles, heroEntryCol, heroEntryRow, name}
+// Teleport triggers: tile type WIN goes to final-win, EXIT returns to world
+// SHOP/INN tiles open overlay when stepped on
+// =============================================================================
+
+// VILLAGE 1 INTERIOR (20x14)
+const VILLAGE1_INT = {
+  id:'v1int', name:'Millbrook Village', cols:20, rows:14,
+  heroEntryCol:10, heroEntryRow:12,
+  worldExitCol:9, worldExitRow:26,
+  tiles: [
+    [11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8,12,12, 8, 8, 8, 8, 8, 8, 8, 8, 8,13,13, 8, 8, 8, 8,11],
+    [11, 8,12,12, 8, 8, 8, 8, 8, 8, 8, 8, 8,13,13, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11,11,11,11,11,11,11,11,11,15,15,11,11,11,11,11,11,11,11,11],
+    [11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11],
+  ]
+};
+
+// VILLAGE 2 INTERIOR (20x14)
+const VILLAGE2_INT = {
+  id:'v2int', name:'Duskholm Village', cols:20, rows:14,
+  heroEntryCol:10, heroEntryRow:12,
+  worldExitCol:35, worldExitRow:11,
+  tiles: [
+    [11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8,12,12, 8, 8, 8, 8, 8, 8, 8, 8, 8,13,13, 8, 8,11],
+    [11, 8, 8, 8,12,12, 8, 8, 8, 8, 8, 8, 8, 8, 8,13,13, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,11],
+    [11,11,11,11,11,11,11,11,11,15,15,11,11,11,11,11,11,11,11,11],
+    [11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11],
+  ]
+};
+
+// CASTLE 1 INTERIOR (24x18) - final boss inside
+const CASTLE1_INT = {
+  id:'c1int', name:'Castle Darkhorn', cols:32, rows:24,
+  heroEntryCol:15, heroEntryRow:22,
+  worldExitCol:31, worldExitRow:17,
+  tiles: [[11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11], [11, 11, 11, 11, 11, 14, 11, 11, 14, 11, 11, 11, 14, 14, 14, 14, 11, 11, 11, 14, 11, 11, 11, 14, 11, 11, 14, 11, 11, 14, 11, 11], [11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 16, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 14, 11, 11, 11, 11, 11, 11, 11, 14, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 11, 11], [11, 11, 14, 11, 14, 11, 14, 11, 14, 14, 11, 11, 11, 11, 11, 14, 11, 14, 11, 14, 11, 14, 11, 14, 11, 14, 11, 11, 11, 11, 11, 11], [11, 11, 14, 11, 11, 11, 14, 11, 11, 14, 14, 11, 11, 11, 11, 14, 11, 14, 11, 11, 11, 14, 11, 14, 11, 14, 11, 11, 11, 11, 11, 11], [11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 14, 14, 11, 11, 11, 11, 14, 14, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11], [11, 14, 11, 11, 14, 11, 11, 14, 11, 11, 14, 14, 14, 14, 14, 14, 11, 11, 14, 11, 11, 14, 11, 11, 14, 11, 11, 11, 14, 11, 11, 11], [11, 14, 11, 14, 11, 11, 14, 11, 11, 11, 14, 14, 14, 14, 14, 14, 11, 11, 14, 11, 14, 11, 11, 11, 11, 14, 11, 11, 11, 14, 11, 11], [11, 14, 11, 11, 14, 11, 11, 14, 11, 11, 14, 14, 14, 14, 14, 14, 11, 11, 14, 11, 11, 14, 11, 11, 14, 11, 14, 11, 11, 14, 11, 11], [11, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 14, 14, 14, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 14, 14, 14, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 14, 11, 11, 14, 11, 11, 11, 14, 11, 11, 11, 14, 11, 11, 11, 14, 11, 11, 14, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 14, 14, 14, 14, 14, 14, 14, 14, 14, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 15, 15, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11]]
+};
+
+// CASTLE 2 INTERIOR (dungeon castle, 22x16)
+const CASTLE2_INT = {
+  id:'c2int', name:'Dungeon Keep', cols:32, rows:22,
+  heroEntryCol:14, heroEntryRow:20,
+  worldExitCol:21, worldExitRow:10,
+  tiles: [[11, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 10, 11, 11, 11, 10, 11, 11, 11, 16, 16, 11, 11, 11, 10, 11, 11, 11, 10, 11, 11, 11, 10, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 11, 10, 11, 11, 11, 10, 11, 11, 11, 10, 11, 10, 11, 10, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 11, 16, 11, 11, 11, 10, 11, 11, 11, 10, 11, 16, 11, 10, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 11, 11, 11, 11, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11], [11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11], [11, 11, 10, 11, 10, 11, 11, 11, 10, 11, 11, 11, 10, 11, 11, 11, 10, 11, 11, 11, 10, 11, 11, 11, 10, 11, 11, 10, 11, 11, 11, 11], [10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11], [10, 11, 11, 11, 10, 11, 11, 10, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 10, 11, 11, 11, 10, 11, 11, 10, 10, 11, 11], [10, 11, 16, 11, 10, 11, 11, 10, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 10, 11, 16, 11, 10, 11, 11, 10, 10, 11, 11], [10, 11, 11, 11, 10, 11, 11, 10, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 10, 11, 11, 11, 10, 11, 11, 10, 10, 11, 11], [10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 11, 11, 10, 11, 11, 16, 11, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11], [11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 15, 15, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11]]
+};
+
+// WIN tile map entries: which world tile triggers which interior
+// worldTile WIN(6) at certain positions → castle entry
+// We detect entry by tile type + position
+const WIN_ENTRIES=[
+  {worldCol:31,worldRow:16,interior:CASTLE1_INT},
+  {worldCol:21,worldRow:9, interior:CASTLE2_INT},
+];
+// Village entries: step on VPATH tile adjacent to village → enter village
+// We use specific "door" world coords
+const VILLAGE_ENTRIES=[
+  {worldCol:9,worldRow:26,interior:VILLAGE1_INT},
+  {worldCol:9,worldRow:25,interior:VILLAGE1_INT},
+  {worldCol:9,worldRow:24,interior:VILLAGE1_INT},
+  {worldCol:35,worldRow:11,interior:VILLAGE2_INT},
+  {worldCol:35,worldRow:10,interior:VILLAGE2_INT},
+  {worldCol:35,worldRow:9, interior:VILLAGE2_INT},
+];
+
+// =============================================================================
+// SHOP / INN DATA
+// =============================================================================
+const SHOP_ITEMS=[
+  {name:'Potion x3',    stat:'Potions +3',  key:'potion', slot:null,    val:3,  cost:20},
+  {name:'Iron Sword',   stat:'ATK +3',      key:'atk',    slot:'weapon', val:3,  cost:30},
+  {name:'Steel Sword',  stat:'ATK +6',      key:'atk',    slot:'weapon', val:6,  cost:60},
+  {name:'Hero Blade',   stat:'ATK +10',     key:'atk',    slot:'weapon', val:10, cost:120},
+  {name:'Leather Armor',stat:'DEF +2',      key:'def',    slot:'armor',  val:2,  cost:25},
+  {name:'Chain Mail',   stat:'DEF +5',      key:'def',    slot:'armor',  val:5,  cost:55},
+  {name:'Dragon Plate', stat:'DEF +9',      key:'def',    slot:'armor',  val:9,  cost:100},
+  {name:'Magic Tome I', stat:'MagPow +4', key:'magpow', slot:'tome',   val:4,  cost:40},
+  {name:'Magic Tome II', stat:'MagPow +8', key:'magpow', slot:'tome',   val:8,  cost:90},
+];
+const INN_COST=15;
+
+// =============================================================================
+// ENEMY DATA
+// =============================================================================
+const ENEMIES=[
+  {name:'Slime',emoji:'🟢',hp:12,maxHp:12,atk:3,color:'#2ecc71',bgType:'forest',
+   gold:8,xp:5,
+   intro:['* A wobbly SLIME pops out!\n* It looks a little nervous.','* It wobbles from side to side.'],
+   actText:'* You wave hello.\n* SLIME has been cheered up!',
+   actSpares:true,spareReady:false,
+   spareText:'* The Slime bounces aside!\n* You pass safely.',
+   deathText:'* The Slime dissolved.\n* ...',
+   attackLines:['* SLIME hurls goo!','* SLIME bounces at you!','* SLIME gurgles!']},
+  {name:'Stone Golem',emoji:'🪨',hp:22,maxHp:22,atk:6,color:'#95a5a6',bgType:'cave',
+   gold:18,xp:12,
+   intro:['* A STONE GOLEM rumbles awake!\n* The ground shakes.','* GOLEM: INTRUDER DETECTED.'],
+   actText:'* You speak the rune: PEACE.\n* GOLEM lowers its fists.',
+   actSpares:true,spareReady:false,
+   spareText:'* GOLEM steps aside.\n* Its rumbling fades.',
+   deathText:'* The Golem crumbles.\n* ...',
+   attackLines:['* GOLEM slams the ground!','* GOLEM throws a boulder!','* GOLEM charges!']},
+  {name:'Shadow Dragon',emoji:'🐉',hp:35,maxHp:35,atk:9,color:'#9b59b6',bgType:'sky',
+   gold:35,xp:22,
+   intro:['* A SHADOW DRAGON descends!\n* Its eyes glow violet.','* DRAGON: Prepare yourself!'],
+   actText:'* You draw the Dragon\'s ancient symbol.\n* DRAGON: You know the old signs...',
+   actSpares:true,spareReady:false,
+   spareText:'* The Dragon bows.\n* DRAGON: You may pass.\n* It dissolves into starlight.',
+   deathText:'* The Dragon fades.\n* ...',
+   attackLines:['* DRAGON breathes dark fire!','* DRAGON slashes!','* DRAGON roars!']},
+  {name:'Dark Knight',emoji:'🗡️',hp:30,maxHp:30,atk:11,color:'#c0392b',bgType:'castle',
+   gold:30,xp:20,
+   intro:['* A DARK KNIGHT blocks your path!\n* It raises its blade.','* KNIGHT: None shall pass!'],
+   actText:'* You challenge the knight to honorable combat.\n* KNIGHT: ...Very well. Show me your worth.',
+   actSpares:true,spareReady:false,
+   spareText:'* The Knight sheathes its sword.\n* KNIGHT: You have earned my respect.',
+   deathText:'* The Dark Knight falls.\n* ...',
+   attackLines:['* KNIGHT strikes with its blade!','* KNIGHT shields bash you!','* KNIGHT lunges forward!']},
+  {name:'Lich King',emoji:'💀',hp:200,maxHp:200,atk:22,def:8,color:'#8e44ad',bgType:'boss',
+   gold:500,xp:300,
+   intro:['* THE LICH KING rises from the shadows!\n* Ancient evil fills the air.','* LICH: So you dare challenge me?\n* LICH: I have waited centuries for this day!'],
+   actText:'* You recite the ancient prayer of light.\n* LICH: ...The old words. You dare use them against me?\n* LICH: Perhaps you are not merely a fool.',
+   actSpares:true,spareReady:false,
+   spareText:'* The Lich King recoils.\n* LICH: You wield mercy as a weapon.\n* LICH: I yield. For now.\n* It dissolves into shadow.',
+   deathText:'* THE LICH KING dissolves.\n* The castle trembles.\n* A great darkness lifts.',
+   attackLines:['* LICH KING fires a volley of death bolts!','* LICH KING summons writhing shadow hands!','* LICH KING drains your life force!','* LICH KING casts Soul Shatter -- reality tears!','* LICH KING unleashes a necrotic wave!','* LICH KING screams -- the walls crack and bleed!','* LICH KING phases through space and strikes!']},
+  {name:'Skeleton',emoji:'💀',hp:16,maxHp:16,atk:5,color:'#c8c8c8',bgType:'cave',
+   gold:10,xp:8,
+   intro:['* A SKELETON rattles out of the shadows!','* Its hollow eyes glow faintly.'],
+   actText:'* You examine the skeleton closely.\n* An old medal hangs from its neck.\n* You salute it respectfully.\n* SKELETON seems calmed.',
+   actSpares:true,spareReady:false,
+   spareText:'* The Skeleton salutes back stiffly.\n* It collapses into a peaceful heap.',
+   deathText:'* The Skeleton crumbles to dust.\n* ...',
+   attackLines:['* SKELETON slashes with a bone sword!','* SKELETON hurls its ribcage!','* SKELETON rattles menacingly!']},
+  {name:'Fire Imp',emoji:'🔥',hp:14,maxHp:14,atk:7,color:'#e67e22',bgType:'sky',
+   gold:14,xp:10,
+   intro:['* A FIRE IMP swoops down!\n* It cackles maniacally.','* IMP: Ooh ooh! Fresh adventurer! MINE!'],
+   actText:'* You offer the Imp a shiny coin.\n* IMP: Ooh... shiny...\n* IMP: Maybe you not so bad!',
+   actSpares:true,spareReady:false,
+   spareText:'* The Imp grabs the coin and flies off.\n* IMP: Bye bye! Hehehehe!',
+   deathText:'* The Fire Imp fizzles out.\n* ...',
+   attackLines:['* IMP throws a fireball!','* IMP scratches with burning claws!','* IMP breathes a cone of flame!']},
+  {name:'Werewolf',emoji:'🐺',hp:28,maxHp:28,atk:8,color:'#7f8c8d',bgType:'forest',
+   gold:22,xp:18,
+   intro:['* A WEREWOLF leaps from the treeline!\n* It howls at the moon.','* WEREWOLF: Grrrrrr...'],
+   actText:'* You howl back at the moon.\n* WEREWOLF tilts its head, confused.\n* WEREWOLF: ...You are strange, human.\n* WEREWOLF: But brave.',
+   actSpares:true,spareReady:false,
+   spareText:'* The Werewolf huffs and steps aside.\n* WEREWOLF: This forest is mine.\n* WEREWOLF: But you may pass... this once.',
+   deathText:'* The Werewolf collapses.\n* The moonlight fades.',
+   attackLines:['* WEREWOLF slashes with its claws!','* WEREWOLF bites ferociously!','* WEREWOLF lunges at full speed!']}
+];
+
+// =============================================================================
+// STATE
+// =============================================================================
+let G={
+  phase:'title',
+  map:WORLD, mapCols:60, mapRows:38,
+  currentInterior:null,
+  heroCol:HERO_WORLD_COL, heroRow:HERO_WORLD_ROW,
+  heroHp:20, heroMaxHp:20,
+  heroMp:10, heroMaxMp:10,
+  heroAtk:3, heroDef:0, heroMagPow:5,
+  gold:0, potions:2, xp:0, xpNext:20, level:1,
+  stepsSince:999,
+  enemy:null,
+  dlgQ:[],dlgI:0,afterDlg:null,
+  pacifist:true,
+  keysDown:{},dpadDir:null,dpadTick:null,
+  shopOwned:{},
+  equipped:{weapon:null,armor:null,tome:null},  // index into SHOP_ITEMS
+};
+
+// =============================================================================
+// SCREENS
+// =============================================================================
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+
+// =============================================================================
+// MAP CANVAS
+// =============================================================================
+const mc=document.getElementById('map-canvas');
+const mx=mc.getContext('2d');
+
+function getTile(col,row){
+  const m=G.currentInterior||{tiles:G.map,cols:G.mapCols,rows:G.mapRows};
+  if(row<0||row>=m.rows||col<0||col>=m.cols) return T.VOID;
+  return (m.tiles[row]||[])[col]||0;
+}
+
+function drawMapTile(col,row,sx,sy){
+  const t=getTile(col,row);
+  mx.fillStyle=TC[t]||'#000';mx.fillRect(sx,sy,TW,TH);
+  // simple sprite details
+  if(t===T.GRASS&&(col+row)%4===0){mx.fillStyle='#3a8a3a';mx.fillRect(sx+2,sy+8,1,3);mx.fillRect(sx+6,sy+7,1,4);}
+  else if(t===T.FOREST){mx.fillStyle='#0d2a0d';mx.fillRect(sx+3,sy+5,6,7);mx.fillStyle='#1a5a1a';mx.beginPath();mx.moveTo(sx+6,sy+1);mx.lineTo(sx+11,sy+7);mx.lineTo(sx+1,sy+7);mx.closePath();mx.fill();}
+  else if(t===T.CAVE){mx.fillStyle='#3a1a5a';mx.beginPath();mx.moveTo(sx+5,sy+10);mx.lineTo(sx+7,sy+3);mx.lineTo(sx+9,sy+10);mx.closePath();mx.fill();}
+  else if(t===T.SKY){mx.fillStyle='#ffffff33';mx.fillRect(sx+1,sy+2,2,2);mx.fillRect(sx+8,sy+5,1,1);}
+  else if(t===T.PATH||t===T.VPATH){mx.strokeStyle='#4a3010';mx.lineWidth=0.5;mx.strokeRect(sx+1,sy+1,4,4);mx.strokeRect(sx+6,sy+6,4,4);}
+  else if(t===T.WIN){mx.fillStyle='#f5c542';mx.fillRect(sx+3,sy+3,6,8);mx.fillRect(sx+1,sy+1,3,4);mx.fillRect(sx+8,sy+1,3,4);mx.fillStyle='#000';mx.fillRect(sx+5,sy+7,2,4);}
+  else if(t===T.MOUNTAIN){mx.fillStyle='#5a5a5a';mx.beginPath();mx.moveTo(sx+6,sy+1);mx.lineTo(sx+11,sy+10);mx.lineTo(sx+1,sy+10);mx.closePath();mx.fill();mx.fillStyle='#ddd';mx.beginPath();mx.moveTo(sx+6,sy+1);mx.lineTo(sx+8,sy+5);mx.lineTo(sx+4,sy+5);mx.closePath();mx.fill();}
+  else if(t===T.CASTLE||t===T.CASTLE_IN||t===T.DUNGEON){mx.fillStyle='#8a7050';mx.fillRect(sx+1,sy+2,10,8);mx.fillStyle='#000';mx.fillRect(sx+4,sy+6,4,4);}
+  else if(t===T.SHOP){mx.fillStyle='#c0832a';mx.fillRect(sx+1,sy+1,10,9);mx.fillStyle='#f5c542';mx.font='6px serif';mx.textAlign='center';mx.textBaseline='middle';mx.fillText('$',sx+6,sy+6);}
+  else if(t===T.INN){mx.fillStyle='#4a3a6a';mx.fillRect(sx+1,sy+1,10,9);mx.fillStyle='#aaaaff';mx.font='6px serif';mx.textAlign='center';mx.textBaseline='middle';mx.fillText('z',sx+6,sy+6);}
+  else if(t===T.EXIT){mx.fillStyle='#1a3a1a';mx.fillRect(sx,sy,TW,TH);mx.fillStyle='#2ecc71';mx.fillRect(sx+3,sy+3,6,6);}
+  else if(t===T.BOSS){mx.fillStyle='#3a0a0a';mx.fillRect(sx,sy,TW,TH);mx.fillStyle='#c0392b';mx.font='8px serif';mx.textAlign='center';mx.textBaseline='middle';mx.fillText('!',sx+6,sy+6);}
+  else if(t===T.SAND){mx.fillStyle='#d4aa60';if((col+row)%5===0)mx.fillRect(sx+2,sy+2,2,2);}
+  else if(t===T.SNOW){mx.fillStyle='#d0e8f0';if((col+row)%3===0){mx.fillStyle='#ffffff';mx.fillRect(sx+3,sy+3,2,2);}}
+  else if(t===T.BRIDGE){mx.fillStyle='#8a6a3a';mx.fillRect(sx,sy+4,TW,4);mx.fillStyle='#6a4a1a';mx.fillRect(sx+2,sy+2,2,8);mx.fillRect(sx+8,sy+2,2,8);}
+}
+
+function drawMap(){
+  const m=G.currentInterior||{tiles:G.map,cols:G.mapCols,rows:G.mapRows};
+  const camX=G.heroCol*TW+TW/2-160;
+  const camY=G.heroRow*TH+TH/2-90;
+  mx.clearRect(0,0,320,180);
+  const sc=Math.floor(camX/TW)-1,sr=Math.floor(camY/TH)-1;
+  for(let r=sr;r<sr+VIEW_ROWS+2;r++){
+    for(let c=sc;c<sc+VIEW_COLS+2;c++){
+      const sx=c*TW-camX,sy=r*TH-camY;
+      if(r<0||r>=m.rows||c<0||c>=m.cols){mx.fillStyle='#0a1a3a';mx.fillRect(sx,sy,TW,TH);}
+      else drawMapTile(c,r,sx,sy);
+    }
+  }
+  // Hero
+  mx.font='10px serif';mx.textAlign='center';mx.textBaseline='middle';
+  mx.fillText('\u{1F9D1}',G.heroCol*TW-camX+TW/2,G.heroRow*TH-camY+TH/2);
+
+  // Update HUD
+  const t=getTile(G.heroCol,G.heroRow);
+  document.getElementById('hud-hp').textContent='HP:'+G.heroHp+'/'+G.heroMaxHp;
+  document.getElementById('hud-mp').textContent='MP:'+G.heroMp+'/'+G.heroMaxMp;
+  document.getElementById('hud-gold').textContent='G:'+G.gold;
+  document.getElementById('hud-atk').textContent='ATK:'+G.heroAtk;
+  const wn=G.equipped.weapon!=null?SHOP_ITEMS[G.equipped.weapon].name.split(' ')[0]:'Fists';
+  const an=G.equipped.armor!=null?SHOP_ITEMS[G.equipped.armor].name.split(' ').slice(-1)[0]:'None';
+  document.getElementById('hud-zone').textContent='['+wn+'/'+an+']';
+  document.getElementById('hud-def').textContent='DEF:'+G.heroDef;
+  document.getElementById('hud-lv').textContent='Lv:'+G.level+'('+G.xp+'/'+G.xpNext+')';
+  // zone in map-msg on move; hud-zone shows gear
+}
+
+// =============================================================================
+// MOVEMENT & TELEPORT
+// =============================================================================
+const DIRS={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+
+function tryMove(dir){
+  if(G.phase!=='map')return;
+  const[dc,dr]=DIRS[dir];
+  const nc=G.heroCol+dc,nr=G.heroRow+dr;
+  const t=getTile(nc,nr);
+  if(!PASSABLE.has(t))return;
+  G.heroCol=nc;G.heroRow=nr;G.stepsSince++;
+  drawMap();
+
+  // Interior exit
+  if(t===T.EXIT&&G.currentInterior){
+    exitInterior();return;
+  }
+
+  // WIN tile = enter castle
+  if(t===T.WIN&&!G.currentInterior){
+    const entry=WIN_ENTRIES.find(e=>e.worldCol===nc&&e.worldRow===nr);
+    if(entry){doFlash(()=>enterInterior(entry.interior));return;}
+    // fallback: trigger win
+    triggerEnd(true);return;
+  }
+
+  // WIN tile inside castle = final boss fight or win
+  if(t===T.WIN&&G.currentInterior){triggerEnd(true);return;}
+
+  // Boss room tile inside castle = enemy varies by position + interior
+  if(t===T.BOSS&&G.currentInterior){
+    let enemyIdx;
+    if(G.currentInterior.id==='c1int'){
+      // Throne room rows 0-4 = Lich King; elsewhere = Dark Knight
+      enemyIdx=(G.heroRow<=4)?4:3;
+    }else{
+      // Dungeon Keep: boss chamber rows 0-2 = Dark Knight; elsewhere = Skeleton or Golem
+      if(G.heroRow<=2) enemyIdx=3;
+      else enemyIdx=(Math.random()<0.5)?5:1;
+    }
+    doFlash(()=>beginBattle(enemyIdx,true));return;
+  }
+
+  // Village entry from world
+  if(!G.currentInterior){
+    const ventry=VILLAGE_ENTRIES.find(e=>e.worldCol===nc&&e.worldRow===nr);
+    if(ventry&&t===T.VPATH){
+      // check if we're "entering" (adjacent to void/village boundary)
+      // simple: just enter if we find a matching entry
+    }
+  }
+
+  // Shop / Inn tiles
+  if(t===T.SHOP){openShop();return;}
+  if(t===T.INN){openInn();return;}
+
+  // Dungeon/castle entry from world
+  if(t===T.CASTLE&&!G.currentInterior){
+    // find matching WIN_ENTRY nearby
+    const entry=WIN_ENTRIES.find(e=>Math.abs(e.worldCol-nc)<=2&&Math.abs(e.worldRow-nr)<=2);
+    if(entry){
+      // don't enter automatically from castle exterior, only from WIN tile
+    }
+  }
+
+  // Random encounter
+  if(DANGER.has(t)&&G.stepsSince>=ENCOUNTER_COOLDOWN&&Math.random()<ENCOUNTER_RATE){
+    const pool=ZONE_ENEMIES[t]||[0];
+    const idx=pool[Math.floor(Math.random()*pool.length)];
+    doFlash(()=>beginBattle(idx,false));return;
+  }
+
+  // Flavor text
+  const msgs={
+    2:['* Rustling in the trees...','* Something moves nearby...','* The forest is very dark.'],
+    3:['* Crystals hum softly.','* Your footsteps echo.','* Something glints in the dark.'],
+    4:['* The wind whips past you.','* Stars gleam all around you.'],
+    10:['* The dungeon is cold and damp.','* Something lurks in the shadows.','* Distant chains rattle.'],
+    16:['* A foul presence fills the air.','* Something powerful waits here...'],
+    17:['* Sand crunches underfoot.','* The heat is oppressive.'],
+    18:['* Biting cold surrounds you.','* Snow muffles your footsteps.'],
+    8:['* The village smells like bread.','* Warm light comes from the windows.'],
+    14:['* Torchlight flickers on stone walls.','* This castle is ancient.','* Something stalks these halls.','* The air is thick with dark magic.','* A guard patrols nearby...'],
+  };
+  const arr=msgs[t];
+  document.getElementById('map-msg').textContent=arr?arr[Math.floor(Math.random()*arr.length)]:'';
+}
+
+function enterInterior(interior){
+  G.currentInterior=interior;
+  G.heroCol=interior.heroEntryCol;
+  G.heroRow=interior.heroEntryRow;
+  G.phase='map';
+  showZoneFlash(interior.name);
+  drawMap();
+  document.getElementById('map-msg').textContent='* You enter '+interior.name+'.';
+}
+
+function exitInterior(){
+  const ex=G.currentInterior;
+  G.currentInterior=null;
+  G.heroCol=ex.worldExitCol;
+  G.heroRow=ex.worldExitRow;
+  G.phase='map';
+  doFlash(()=>{drawMap();document.getElementById('map-msg').textContent='* You step back outside.';});
+}
+
+function showZoneFlash(name){
+  const el=document.getElementById('zone-flash');
+  el.textContent=name;el.style.opacity='1';
+  setTimeout(()=>{el.style.opacity='0';},2500);
+}
+
+// =============================================================================
+// KEYBOARD + DPAD
+// =============================================================================
+document.addEventListener('keydown',e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key))e.preventDefault();
+  if(G.keysDown[e.key])return;G.keysDown[e.key]=true;
+  const m={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'};
+  if(m[e.key])tryMove(m[e.key]);
+  if(e.key===' '||e.key==='Enter')advanceDialogue();
+});
+document.addEventListener('keyup',e=>{G.keysDown[e.key]=false;});
+function dpadStart(dir){tryMove(dir);G.dpadDir=dir;clearInterval(G.dpadTick);G.dpadTick=setInterval(()=>{if(G.dpadDir)tryMove(G.dpadDir);},200);}
+function dpadEnd(){G.dpadDir=null;clearInterval(G.dpadTick);}
+
+// =============================================================================
+// FLASH
+// =============================================================================
+function doFlash(cb){const f=document.getElementById('flash');f.style.opacity='1';setTimeout(()=>{cb();f.style.opacity='0';},200);}
+
+// =============================================================================
+// SHOP / INN
+// =============================================================================
+function openShop(){
+  G.phase='shop';
+  const box=document.getElementById('shop-overlay');
+  document.getElementById('shop-title').textContent='WEAPON & ARMOR SHOP';
+  renderShop();
+  box.classList.add('active');
+}
+function renderShop(){
+  document.getElementById('shop-gold').textContent='Your Gold: '+G.gold+'g';
+  document.getElementById('shop-msg').textContent='';
+  const cont=document.getElementById('shop-items');
+  cont.innerHTML='';
+  SHOP_ITEMS.forEach((item,i)=>{
+    const owned=G.shopOwned[i];
+    const cantAfford=G.gold<item.cost;
+    const isEquipped=item.slot&&G.equipped[item.slot]===i;
+    const div=document.createElement('div');div.className='shop-item';
+    let btns='';
+    if(item.key==='potion'){
+      btns='<button class="shop-btn" '+(cantAfford?'disabled':'')+' onclick="buyItem('+i+')">BUY</button>';
+    }else if(!owned){
+      btns='<button class="shop-btn" '+(cantAfford?'disabled':'')+' onclick="buyItem('+i+')">BUY</button>';
+    }else if(isEquipped){
+      btns='<span class="shop-item-equipped">[EQUIPPED]</span>'
+           +'<button class="shop-btn" onclick="unequipSlot(\''+item.slot+'\')">REMOVE</button>';
+    }else{
+      btns='<span class="shop-item-equipped">[OWNED]</span>'
+           +'<button class="shop-btn equip" onclick="equipItem('+i+')">EQUIP</button>';
+    }
+    div.innerHTML='<span class="shop-item-name">'+item.name+'</span>'
+      +'<span class="shop-item-stat">'+item.stat+'</span>'
+      +'<span class="shop-item-cost">'+(owned?'':''+item.cost+'g')+'</span>'
+      +btns;
+    cont.appendChild(div);
+  });
+}
+function buyItem(i){
+  const item=SHOP_ITEMS[i];
+  if(G.gold<item.cost)return;
+  if(item.key!=='potion'&&G.shopOwned[i])return;
+  G.gold-=item.cost;
+  if(item.key==='potion'){
+    G.potions+=item.val;
+    document.getElementById('shop-msg').textContent='* Got '+item.val+' potions!';
+  }else{
+    G.shopOwned[i]=true;
+    equipItem(i);
+    document.getElementById('shop-msg').textContent='* Bought and equipped '+item.name+'!';
+  }
+  renderShop();drawMap();
+}
+function equipItem(i){
+  const item=SHOP_ITEMS[i];
+  if(!item.slot||!G.shopOwned[i])return;
+  G.equipped[item.slot]=i;
+  recalcStats();
+  document.getElementById('shop-msg').textContent='* Equipped '+item.name+'!';
+  renderShop();drawMap();
+}
+function unequipSlot(slot){
+  G.equipped[slot]=null;
+  recalcStats();
+  document.getElementById('shop-msg').textContent='* Unequipped.';
+  renderShop();drawMap();
+}
+function recalcStats(){
+  // Base stats
+  G.heroAtk=3+G.level-1;
+  G.heroDef=0;
+  G.heroMagPow=5+G.level-1;
+  // Add equipped weapon
+  const wi=G.equipped.weapon;
+  if(wi!=null)G.heroAtk=SHOP_ITEMS[wi].val+3;
+  // Add equipped armor
+  const ai=G.equipped.armor;
+  if(ai!=null)G.heroDef=SHOP_ITEMS[ai].val;
+  // Add equipped tome
+  const ti=G.equipped.tome;
+  if(ti!=null)G.heroMagPow=SHOP_ITEMS[ti].val+5;
+}
+function openInn(){
+  G.phase='shop';
+  const box=document.getElementById('shop-overlay');
+  document.getElementById('shop-title').textContent='INN - REST HERE';
+  document.getElementById('shop-gold').textContent='Your Gold: '+G.gold+'  |  Cost: '+INN_COST+'g';
+  document.getElementById('shop-msg').textContent='';
+  const cont=document.getElementById('shop-items');
+  cont.innerHTML='';
+  const row=document.createElement('div');row.className='shop-item';
+  row.innerHTML='<span class="shop-item-name">Rest for the night</span>'
+    +'<span class="shop-item-stat">Restore HP &amp; MP</span>'
+    +'<span class="shop-item-cost">'+INN_COST+'g</span>'
+    +'<button class="shop-btn" '+(G.gold<INN_COST?'disabled':'')+' onclick="buyRest()">REST</button>';
+  cont.appendChild(row);
+  box.classList.add('active');
+}
+function buyRest(){
+  if(G.gold<INN_COST)return;
+  G.gold-=INN_COST;
+  G.heroHp=G.heroMaxHp;G.heroMp=G.heroMaxMp;
+  document.getElementById('shop-msg').textContent='* You sleep soundly. HP and MP restored!';
+  document.getElementById('shop-gold').textContent='Your Gold: '+G.gold+'  |  Cost: '+INN_COST+'g';
+  document.querySelector('#shop-items .shop-btn').disabled=G.gold<INN_COST;
+  drawMap();
+}
+function closeShop(){document.getElementById('shop-overlay').classList.remove('active');G.phase='map';drawMap();}
+
+// =============================================================================
+// BATTLE CANVAS
+// =============================================================================
+const bc=document.getElementById('scene-canvas');
+const bx=bc.getContext('2d');
+function drawBattle(bg,ej,ec){
+  bx.clearRect(0,0,320,180);
+  if(bg==='forest'){
+    bx.fillStyle='#1a3a1a';bx.fillRect(0,0,320,90);bx.fillStyle='#0d2a0d';bx.fillRect(0,90,320,90);
+    for(const x of[20,80,160,230,290]){bx.fillStyle='#1e4a1e';bx.fillRect(x-8,30,16,60);bx.fillStyle='#2d7a2d';bx.beginPath();bx.moveTo(x,15);bx.lineTo(x+20,70);bx.lineTo(x-20,70);bx.closePath();bx.fill();}
+    bx.fillStyle='#ffffcc';bx.beginPath();bx.arc(260,30,14,0,Math.PI*2);bx.fill();
+  }else if(bg==='cave'||bg==='dungeon'||bg==='castle'){
+    bx.fillStyle='#111118';bx.fillRect(0,0,320,180);bx.fillStyle='#2a2a3a';
+    for(const x of[40,100,170,240,300]){bx.beginPath();bx.moveTo(x-12,0);bx.lineTo(x+12,0);bx.lineTo(x,40);bx.closePath();bx.fill();}
+    const grd=bx.createLinearGradient(0,140,0,180);grd.addColorStop(0,'transparent');grd.addColorStop(1,'#ff440066');
+    bx.fillStyle=grd;bx.fillRect(0,140,320,40);
+  }else if(bg==='boss'){
+    // Void sky
+    const gsky=bx.createLinearGradient(0,0,0,180);
+    gsky.addColorStop(0,'#05000f');gsky.addColorStop(1,'#150020');
+    bx.fillStyle=gsky;bx.fillRect(0,0,320,180);
+    // Stone floor
+    bx.fillStyle='#1a1520';bx.fillRect(0,120,320,60);
+    // Floor tile lines
+    bx.strokeStyle='#2a2035';bx.lineWidth=1;
+    for(let fx=0;fx<320;fx+=32){bx.beginPath();bx.moveTo(fx,120);bx.lineTo(fx,180);bx.stroke();}
+    for(let fy=120;fy<180;fy+=20){bx.beginPath();bx.moveTo(0,fy);bx.lineTo(320,fy);bx.stroke();}
+    // Cracked pillars left and right
+    bx.fillStyle='#221830';
+    bx.fillRect(12,40,20,80);bx.fillRect(288,40,20,80);
+    bx.fillStyle='#2e2040';
+    bx.fillRect(14,38,16,6);bx.fillRect(14,116,16,6);
+    bx.fillRect(290,38,16,6);bx.fillRect(290,116,16,6);
+    // Crack lines on pillars
+    bx.strokeStyle='#110d1a';bx.lineWidth=1;
+    bx.beginPath();bx.moveTo(22,44);bx.lineTo(18,80);bx.lineTo(24,115);bx.stroke();
+    bx.beginPath();bx.moveTo(298,44);bx.lineTo(302,80);bx.lineTo(296,115);bx.stroke();
+    // Dark altar / throne base
+    bx.fillStyle='#1e1030';bx.fillRect(110,30,100,40);
+    bx.fillStyle='#2a1545';bx.fillRect(115,25,90,8);
+    // Altar glow
+    const ag=bx.createRadialGradient(160,50,2,160,50,50);
+    ag.addColorStop(0,'#6600aa44');ag.addColorStop(1,'transparent');
+    bx.fillStyle=ag;bx.fillRect(110,20,100,50);
+    // Fire sconces on walls
+    for(const fx of [55,265]){
+      bx.fillStyle='#3a2000';bx.fillRect(fx-5,55,10,20);
+      // flame
+      const fg=bx.createRadialGradient(fx,50,1,fx,50,14);
+      fg.addColorStop(0,'#ffdd00cc');fg.addColorStop(0.5,'#ff440088');fg.addColorStop(1,'transparent');
+      bx.fillStyle=fg;bx.fillRect(fx-14,36,28,28);
+    }
+    // Floating dark orbs
+    for(let i=0;i<8;i++){
+      const ox=(i*51+30)%260+30,oy=(i*37+20)%60+18;
+      const og=bx.createRadialGradient(ox,oy,1,ox,oy,6);
+      og.addColorStop(0,'#aa00ff55');og.addColorStop(1,'transparent');
+      bx.fillStyle=og;bx.beginPath();bx.arc(ox,oy,6,0,Math.PI*2);bx.fill();
+    }
+    // Ominous cracks in the sky
+    bx.strokeStyle='#550088';bx.lineWidth=1;
+    bx.beginPath();bx.moveTo(160,0);bx.lineTo(140,35);bx.lineTo(155,50);bx.stroke();
+    bx.beginPath();bx.moveTo(160,0);bx.lineTo(178,40);bx.lineTo(165,55);bx.stroke();
+  }else{
+    const g=bx.createLinearGradient(0,0,0,180);g.addColorStop(0,'#0a001a');g.addColorStop(1,'#2a0044');
+    bx.fillStyle=g;bx.fillRect(0,0,320,180);bx.fillStyle='#ffffff';
+    for(let i=0;i<30;i++)bx.fillRect((i*47+13)%320,(i*31+7)%80,1+(i%2),1+(i%2));
+  }
+  if(ej){bx.font='52px serif';bx.textAlign='center';bx.textBaseline='middle';bx.shadowColor=ec||'#fff';bx.shadowBlur=20;bx.fillText(ej,160,90);bx.shadowBlur=0;}
+  bx.font='16px serif';bx.textAlign='left';bx.textBaseline='bottom';bx.fillText('\u2764',8,172);
+}
+
+// =============================================================================
+// UI HELPERS
+// =============================================================================
+function setDlg(n,t){document.getElementById('dlg-name').textContent=n?'* '+n:'';document.getElementById('dlg-text').textContent=t;}
+function showArrow(v){document.getElementById('dlg-arrow').style.display=v?'':'none';}
+function showActions(v){document.getElementById('action-panel').style.display=v?'flex':'none';}
+function showFooter(v){document.getElementById('footer-tap').style.display=v?'':'none';}
+function updHeroHp(){
+  const ph=Math.max(0,G.heroHp/G.heroMaxHp*100);const pm=Math.max(0,G.heroMp/G.heroMaxMp*100);
+  const bh=document.getElementById('hero-hp-bar');bh.style.width=ph+'%';
+  bh.className='bar hp'+(ph<30?' low':ph<60?' mid':'');
+  document.getElementById('hero-hp-txt').textContent='HP'+Math.max(0,G.heroHp)+'/'+G.heroMaxHp;
+  const bm=document.getElementById('hero-mp-bar');bm.style.width=pm+'%';
+  document.getElementById('hero-mp-txt').textContent='MP'+Math.max(0,G.heroMp)+'/'+G.heroMaxMp;
+}
+function updEnemyHp(){
+  const e=G.enemy;if(!e)return;
+  const p=Math.max(0,e.hp/e.maxHp*100);
+  const b=document.getElementById('enemy-hp-bar');b.style.width=p+'%';
+  b.className='bar hp'+(p<30?' low':p<60?' mid':'');
+  document.getElementById('enemy-hp-txt').textContent='HP'+Math.max(0,e.hp)+'/'+e.maxHp;
+  document.getElementById('enemy-name-lbl').textContent=e.emoji+' '+e.name;
+}
+function shakeDlg(){
+  const b=document.getElementById('dialogue-box');b.style.transition='none';b.style.transform='translateX(-6px)';
+  setTimeout(()=>{b.style.transform='translateX(6px)'},80);setTimeout(()=>{b.style.transform='translateX(0)'},160);
+}
+
+// =============================================================================
+// DIALOGUE ENGINE
+// =============================================================================
+function queueDlg(lines,fn){G.dlgQ=lines;G.dlgI=0;G.afterDlg=fn||null;showArrow(true);showActions(false);showFooter(true);showLine();}
+function showLine(){setDlg('',G.dlgQ[G.dlgI]);showArrow(G.dlgI<G.dlgQ.length-1);}
+function advanceDialogue(){
+  if(['title','map','win','gameover','shop'].includes(G.phase))return;
+  if(G.dlgI<G.dlgQ.length-1){G.dlgI++;showLine();}
+  else{showArrow(false);showFooter(false);if(G.afterDlg){const f=G.afterDlg;G.afterDlg=null;f();}}
+}
+
+// =============================================================================
+// BATTLE FLOW
+// =============================================================================
+function beginBattle(idx,isBoss){
+  G.phase='battle';G.enemy=JSON.parse(JSON.stringify(ENEMIES[idx]));G.stepsSince=0;
+  const e=G.enemy;
+  // Clear and draw new scene BEFORE showing the screen so no old frame ever flashes
+  bx.clearRect(0,0,320,180);
+  drawBattle(e.bgType,e.emoji,e.color);
+  showScreen('battle-screen');
+  updHeroHp();updEnemyHp();
+  document.getElementById('spare-btn').disabled=true;
+  document.getElementById('act-btn').textContent='ACT';
+  document.getElementById('magic-btn').textContent='MAGIC ('+G.heroMp+'mp)';
+  showActions(false);
+  queueDlg(e.intro,()=>{G.phase='battle';showActions(true);setDlg('','* What will you do?');});
+}
+function endBattle(){
+  // Beating the Lich King ends the game
+  const lichKingDefeated = G.enemy && G.enemy.name==='Lich King' && G.enemy.hp<=0;
+  const lichKingSpared   = G.enemy && G.enemy.name==='Lich King' && G.enemy.spareReady;
+  if(lichKingDefeated||lichKingSpared){ triggerEnd(true); return; }
+  G.phase='map';
+  const earned=G.enemy?G.enemy.gold:0;
+  const xpEarned=G.enemy?G.enemy.xp||0:0;
+  G.gold+=earned;
+  G.xp+=xpEarned;
+  let lvMsg='';
+  while(G.xp>=G.xpNext){
+    G.xp-=G.xpNext;
+    G.level++;
+    G.xpNext=Math.floor(G.xpNext*1.6);
+    G.heroMaxHp+=6;G.heroHp=Math.min(G.heroHp+6,G.heroMaxHp);
+    G.heroMaxMp+=3;G.heroMp=Math.min(G.heroMp+3,G.heroMaxMp);
+    recalcStats();
+    lvMsg='LEVEL UP! Now Lv.'+G.level+'!';
+  }
+  const parts=[];
+  if(earned>0)parts.push('* '+earned+' gold earned!');
+  if(xpEarned>0)parts.push('* '+xpEarned+' XP earned! ('+G.xp+'/'+G.xpNext+')');
+  if(lvMsg)parts.push('* '+lvMsg+' HP/MP/ATK up!');
+  const msg=parts.join(' ');
+  doFlash(()=>{showScreen('map-screen');drawMap();document.getElementById('map-msg').textContent=msg||'* You return to the overworld.';});
+}
+function doFight(){
+  if(G.phase!=='battle')return;G.pacifist=false;
+  const e=G.enemy;
+  const rawDmg=Math.floor(Math.random()*4)+G.heroAtk;
+  const dmg=Math.max(1,rawDmg-Math.floor(e.def||0));
+  e.hp=Math.max(0,e.hp-dmg);updEnemyHp();showActions(false);
+  if(e.hp<=0){G.phase='dialogue';queueDlg(['* You attack for '+dmg+' damage!\n* '+e.name+' is defeated.',e.deathText],endBattle);return;}
+  enemyAtk('* You strike for '+dmg+' damage!');
+}
+function doAct(){
+  if(G.phase!=='battle')return;const e=G.enemy;showActions(false);G.phase='dialogue';
+  if(e.actSpares&&!e.spareReady){
+    e.spareReady=true;document.getElementById('spare-btn').disabled=false;
+    queueDlg([e.actText],()=>{G.phase='battle';showActions(true);setDlg('','* '+e.name+' seems ready to be spared.');});
+  }else{
+    queueDlg(['* You look around...\n* Nothing else stands out.'],()=>{G.phase='battle';showActions(true);setDlg('','* What will you do?');});
+  }
+}
+function doMagic(){
+  if(G.phase!=='battle')return;
+  const cost=4;
+  if(G.heroMp<cost){setDlg('','* Not enough MP!\n* (Need '+cost+' MP to cast)');return;}
+  G.heroMp=Math.max(0,G.heroMp-cost);updHeroHp();showActions(false);G.phase='dialogue';
+  const e=G.enemy;
+  const dmg=Math.floor(Math.random()*6)+G.heroMagPow;
+  e.hp=Math.max(0,e.hp-dmg);updEnemyHp();
+  document.getElementById('magic-btn').textContent='MAGIC ('+G.heroMp+'mp)';
+  if(e.hp<=0){queueDlg(['* MAGIC BURST! '+dmg+' damage!\n* '+e.name+' is defeated.',e.deathText],endBattle);return;}
+  enemyAtk('* Magic Burst! '+dmg+' damage!');
+}
+function doItem(){
+  if(G.phase!=='battle')return;
+  if(G.potions<=0){setDlg('','* You are out of potions!');return;}
+  showActions(false);G.phase='dialogue';
+  const heal=Math.min(8,G.heroMaxHp-G.heroHp);
+  G.heroHp=Math.min(G.heroMaxHp,G.heroHp+8);G.potions--;updHeroHp();
+  queueDlg(['* You drink a potion! (+'+heal+' HP)\n* Potions left: '+G.potions],()=>enemyAtk(null,true));
+}
+function doSpare(){
+  if(G.phase!=='battle')return;const e=G.enemy;
+  if(!e.spareReady){setDlg('','* '+e.name+' is not ready yet.\n* Try ACT first.');return;}
+  showActions(false);G.phase='dialogue';drawBattle(e.bgType,'\u2728',e.color);
+  queueDlg([e.spareText,'* '+e.name+' is gone.'],endBattle);
+}
+function enemyAtk(prefix,skip){
+  const e=G.enemy;const al=e.attackLines[Math.floor(Math.random()*e.attackLines.length)];
+  const rawDmg=skip?0:Math.floor(Math.random()*(e.atk/2))+Math.ceil(e.atk/2);
+  // Boss enemies bypass half of hero's DEF (dark magic)
+  const defReduction=e.def!=null?0:Math.floor(G.heroDef*(e.name==='Lich King'?0.3:1));
+  const dmg=Math.max(skip?0:1,rawDmg-defReduction);
+  if(!skip){G.heroHp=Math.max(0,G.heroHp-dmg);updHeroHp();shakeDlg();}
+  const lines=[];if(prefix)lines.push(prefix);if(!skip)lines.push(al+'\n* You take '+dmg+' damage!');
+  G.phase='dialogue';
+  queueDlg(lines.length?lines:['* ...'],()=>{
+    if(G.heroHp<=0){triggerEnd(false);return;}
+    G.phase='battle';showActions(true);
+    document.getElementById('magic-btn').textContent='MAGIC ('+G.heroMp+'mp)';
+    setDlg('','* What will you do?');
+  });
+}
+
+// =============================================================================
+// END
+// =============================================================================
+function triggerEnd(win){
+  G.phase=win?'win':'gameover';showScreen('end-screen');
+  if(win){
+    document.getElementById('end-title').style.color='var(--gold)';
+    document.getElementById('end-title').textContent='YOU WIN!';
+    document.getElementById('end-msg').textContent=G.pacifist
+      ?'You conquered the castle with mercy\nas your weapon.\n\nEvery creature had a story.\nYou chose to listen.\n\nTHE END. (Pacifist ending!)'
+      :'You fought your way to victory.\n\nThe castle falls.\n\nTHE END. (Try sparing everyone next time!)';
+  }else{
+    document.getElementById('end-title').style.color='var(--red)';
+    document.getElementById('end-title').textContent='GAME OVER';
+    document.getElementById('end-msg').textContent='* The hero fell...\n\nRest at an Inn to restore HP.\nDon\'t give up. Try again!';
+  }
+}
+
+// =============================================================================
+// START
+// =============================================================================
+function startGame(){
+  G.phase='map';showScreen('map-screen');drawMap();
+  showZoneFlash('Welcome to Pixel Quest!');
+  document.getElementById('map-msg').textContent='* Use arrow keys or D-pad to explore the world!';
+}
+
+</script>
+</body>
+</html>
